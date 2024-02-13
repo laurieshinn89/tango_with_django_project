@@ -12,6 +12,33 @@ from django.shortcuts import render, redirect
 from .forms import CategoryForm  # Assuming the forms module is in the same directory
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import logout
+from datetime import datetime
+
+
+def get_server_side_cookie(request, cookie, default_val=None):
+    val = request.session.get(cookie)
+    if not val:
+        val = default_val
+    return val
+
+
+def visitor_cookie_handler(request):
+    visits = int(get_server_side_cookie(request, 'visits', '1'))
+    last_visit_cookie = get_server_side_cookie(request,
+                                               'last_visit',
+                                               str(datetime.now()))
+    last_visit_time = datetime.strptime(last_visit_cookie[:-7],
+                                        '%Y-%m-%d %H:%M:%S')
+    # If it's been more than a day since the last visit...
+    if (datetime.now() - last_visit_time).days > 0:
+        visits = visits + 1
+        # Update the last visit cookie now that we have updated the count
+        request.session['last_visit'] = str(datetime.now())
+    else:
+        # Set the last visit cookie
+        request.session['last_visit'] = last_visit_cookie
+    # Update/set the visits cookie
+    request.session['visits'] = visits
 
 
 def index(request):
@@ -25,9 +52,14 @@ def index(request):
     context_dict = {}
     context_dict['boldmessage'] = 'Crunchy, creamy, cookie, candy, cupcake!'
     context_dict['categories'] = category_list
-    context_dict['pages'] = pages_list
+
+    visitor_cookie_handler(request)
+
+    # Obtain our Response object early so we can add cookie information.
+    response = render(request, 'rango/index.html', context=context_dict)
+
     # Render the response and send it back!
-    return render(request, 'rango/index.html', context=context_dict)
+    return response
 
 
 def show_category(request, category_name_slug):
@@ -113,7 +145,11 @@ def add_page(request, category_name_slug):
 
 
 def about(request):
-    return render(request, 'rango/about.html', {})
+    context_dict={}
+    visitor_cookie_handler(request)
+    context_dict['visits'] = request.session['visits']
+    response = render(request, 'rango/about.html', context=context_dict)
+    return response
 
 
 def register(request):
